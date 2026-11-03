@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fungi Hunt</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  /* white page, loose typewriter text, confetti dots drifting like spores */
+  :root{--paper:#ffffff; --ink:#1c1c1c; --soft:#8a8a8a; --rule:#e2e2e2; --type:#ffffff}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);
+    font-family:"Space Mono",ui-monospace,Menlo,monospace;font-size:15px;line-height:1.35}
+  body{position:relative;overflow-x:hidden}
+  #field{position:absolute;left:0;right:0;top:0;z-index:2;pointer-events:none;overflow:hidden}
+  .dot{position:absolute;width:11px;height:11px;border-radius:50%}
+  .dot.big{width:16px;height:16px}
+  /* pale colours (ivory) keep a hairline so they don't vanish on white */
+  .dot,.slot.got,.pip,.kind .pip,.who .ds b,.bk .ph,.bk .pip{box-shadow:inset 0 0 0 1px rgba(61,43,46,.13)}
+  .kind.hidden .pip,.who .ds b.off{box-shadow:none}
+  .dot.new{animation:drop .6s cubic-bezier(.2,1.5,.4,1) both}
+  @keyframes drop{0%{transform:scale(2.4);opacity:0}100%{transform:none;opacity:1}}
+  main{position:relative;z-index:1;max-width:480px;margin:0 auto;min-height:100vh;
+    padding:22px max(18px, env(safe-area-inset-right, 0px)) 48px max(18px, env(safe-area-inset-left, 0px))}
+  .s{font-size:.82rem}
+  .mute{color:var(--soft)}
+  .row2{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .r{text-align:right}
+
+  /* photo */
+  .frame{margin:56px 0 0}
+  .frame .cap{margin:0 0 4px}
+  .slides{display:block}
+  .photo{position:relative;aspect-ratio:4/5;max-width:100%;background:#f3f3f1;display:grid;place-items:center;overflow:hidden}
+  .photo img{width:100%;height:100%;object-fit:contain;display:block}
+  .photo.real img{object-fit:cover}
+  .photo.has-img{background:none}
+  .photo[hidden]{display:none}
+  .photo .empty{color:var(--soft);font-size:.82rem;text-align:center;padding:0 20px}
+  .photo .credit{position:absolute;left:8px;bottom:6px;right:8px;font-size:.6rem;line-height:1.3;color:#fff;text-shadow:0 0 3px rgba(0,0,0,.8),0 0 8px rgba(0,0,0,.5)}
+  #slideLab{white-space:pre;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .pager{gap:10px}
+  .pager{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+  .pager .pips{display:flex;gap:6px}
+  .pager .pips b{width:7px;height:7px;border-radius:50%;border:1px solid var(--ink);display:block}
+  .pager .pips b.on{background:var(--ink)}
+  .arrows{display:flex;gap:4px}
+  .arw{font:inherit;font-size:1rem;background:none;border:0;color:var(--ink);padding:2px 8px;cursor:pointer}
+  .arw:disabled{color:#c4c4c4;cursor:default}
+  .arw:focus-visible{outline:2px dotted var(--ink);outline-offset:2px}
+  .slides{cursor:pointer;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}
+  .slides img{-webkit-user-drag:none;pointer-events:none}
+  .frame .x{text-align:right;margin:4px 0 0}
+
+  /* loose info lines */
+  .loose{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:26px 10px;margin:48px 0 0}
+  .loose .b{grid-column:2;text-align:right}
+  .loose .c{grid-column:1/-1;padding:0 8%}
+  .note{margin:0;font-size:.95rem}
+
+  .form{margin-top:56px}
+  label{display:block}
+  input{width:100%;font:inherit;font-size:1.05rem;padding:.4rem 0;border:0;border-bottom:1px solid var(--ink);background:transparent;color:var(--ink);border-radius:0;margin-top:4px}
+  input:focus{outline:none;border-bottom-width:2px}
+  input::placeholder{color:#bdbdbd}
+  .go{margin-top:18px;font:inherit;font-size:1.05rem;background:none;border:0;padding:4px 0;color:var(--ink);cursor:pointer;
+    text-decoration:underline;text-underline-offset:4px;display:inline-flex;gap:10px;align-items:center}
+  .go .pip{width:12px;height:12px;border-radius:50%;background:var(--c);display:inline-block}
+  .go:disabled{cursor:default;text-decoration:none}
+  .go:focus-visible{outline:2px dotted var(--ink);outline-offset:4px}
+  .msg{font-size:.82rem;margin:6px 0 0;min-height:1.2em}
+  .msg.err{color:#e23b2e}
+
+  /* collected dots */
+  .sheet{margin-top:44px}
+  .slots{display:flex;gap:14px;margin:12px 0 6px;flex-wrap:wrap}
+  .slot{width:44px;height:44px;border-radius:50%;border:1px dashed #c9c9c9;position:relative;flex:none}
+  .slot.got{border:0;background:var(--c)}
+  .slot.new{animation:drop .55s cubic-bezier(.2,1.5,.4,1) both}
+  .slot i{position:absolute;left:-6px;right:-6px;top:50px;text-align:center;font-style:normal;font-size:.62rem;color:var(--soft)}
+  .colophon{margin:90px 0 0;text-align:right;font-size:.9rem;line-height:1.3}
+  /* tabs on top of a mushroom page: this mushroom / live board */
+  .tabs{position:sticky;top:0;z-index:3;display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+    background:var(--paper);margin:-22px 0 0;padding:14px 0 10px;border-bottom:1px solid var(--rule)}
+  .tabs nav{display:flex;gap:18px}
+  .tabs a{color:var(--soft);text-decoration:none}
+  .tabs a.on{color:var(--ink);text-decoration:underline;text-underline-offset:4px}
+  .tabs a:focus-visible{outline:2px dotted var(--ink);outline-offset:3px}
+  .toboard{display:inline-block;margin-top:18px;color:var(--ink);text-underline-offset:4px}
+  .blink{color:var(--ink);text-underline-offset:3px}
+  /* my basket */
+  .bk-head{margin:56px 0 0}
+  .bk-head .n{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:4.2rem;line-height:1;display:block;margin-top:10px}
+  .bk-list{margin:44px 0 0;display:flex;flex-direction:column;gap:22px}
+  .bk{display:grid;grid-template-columns:64px 1fr;gap:14px;align-items:center}
+  .bk .ph{width:64px;height:64px;border-radius:50%;overflow:hidden;background:var(--c);display:block}
+  .bk .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .bk.no .ph{background:transparent;border:1px dashed #b9b9b9}
+  .bk .t{display:flex;flex-direction:column;gap:2px}
+  .bk .t a{color:var(--ink);text-underline-offset:3px}
+  .bk .pip{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--c);margin-right:6px;vertical-align:0}
+  .bk-who{margin:56px 0 0}
+
+  /* board */
+  .board main{max-width:none;display:flex;flex-direction:column;padding-left:max(28px, env(safe-area-inset-left, 0px));padding-right:max(28px, env(safe-area-inset-right, 0px))}
+  .board .space{flex:1;min-height:30vh}
+  .board .big{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--ink);font-size:clamp(2.8rem,7vw,5.4rem);line-height:1.1;margin:0;display:block}
+  .board .stats{display:flex;gap:8vw;flex-wrap:wrap;margin:8vh 0 0 18vw}
+  .board .stats div{display:flex;flex-direction:column}
+  .board .kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:26px 30px;margin:9vh 0 0}
+  .kind{display:flex;gap:10px;align-items:baseline}
+  .kind .mute{white-space:nowrap}
+  .kind .pip{width:12px;height:12px;border-radius:50%;background:var(--c);flex:none;transform:translateY(1px)}
+  .kind.hidden .pip{background:transparent;border:1px dashed #b5b5b5}
+  .board .people{display:flex;flex-wrap:wrap;gap:18px 34px;margin:7vh 0 0;justify-content:flex-end;text-align:right}
+  .who .ds{display:inline-flex;gap:3px;margin-left:6px;vertical-align:1px}
+  .who .ds b{width:8px;height:8px;border-radius:50%;background:var(--c)}
+  .who .ds b.off{background:transparent;border:1px solid #c4c4c4}
+  .w{display:inline-block;animation:wob 7s ease-in-out var(--d,0s) infinite}
+  @keyframes wob{0%,100%{transform:translateY(calc(var(--a) * -.5)) rotate(calc(var(--ro) * -.5))}50%{transform:translateY(calc(var(--a) * .5)) rotate(calc(var(--ro) * .5))}}
+  .wd{display:inline-block;white-space:nowrap}
+  /* title: every letter is a spore, strung out in lines that burst across the page */
+  .board .burst{position:relative;margin:3vh 0 0;font-weight:400}
+  /* each letter sits in a ball; under the pointer the balls swell like they're seen through a magnifying glass */
+  .bead{position:absolute;z-index:1;line-height:1;
+    animation:wob 7s ease-in-out var(--d,0s) infinite;
+    transition:scale .35s cubic-bezier(.2,1.5,.4,1), translate .45s cubic-bezier(.2,1.4,.4,1)}
+  .bead .cap{position:relative;display:block;border-radius:50%;background:var(--c)}
+  .bead svg{display:block;overflow:visible}
+  .bead text{fill:var(--t);font-family:"Fredoka","Arial Rounded MT Bold","Helvetica Neue",sans-serif;font-weight:600}
+  .bead.stray{opacity:.95}
+  .board .stats div{align-items:flex-start}
+  .board .kind{transform-origin:left center}
+  .board .who{display:inline-block}
+  @media (prefers-reduced-motion: reduce){.dot.new,.slot.new,.w,.bead{animation:none}}
+</style>
+</head>
+<body>
+<div id="field" aria-hidden="true"></div>
+<main id="app"><span class="s mute">loading…</span></main>
+
+<script>
+const MID = new URLSearchParams(location.search).get('m') || '';
+const HOME = location.origin + location.pathname;
+const BASKET = HOME + '?m=basket';
+let M = [], ME = '';
+try { ME = localStorage.getItem('fungiName') || ''; } catch (e) {}
+const app = document.getElementById('app'), field = document.getElementById('field');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// the check-ins live in a Google Sheet; this page asks it through a small web address (no Google sign-in needed)
+const API = 'https://script.google.com/macros/s/AKfycbyDVAr-pzIhC5WPJW-4coGJ9huSXC0tVHMrWUO6f5ujCWVR4Sqf3VPTBStCl2dF7h4hbA/exec';
+async function call(fn, ...args) {
+  const q = new URLSearchParams({ api: fn === 'getMushrooms' ? 'mushrooms' : fn });
+  if (fn === 'checkin') { q.set('name', args[0]); q.set('m', args[1]); }
+  q.set('t', Date.now());
+  const r = await fetch(API + '?' + q.toString(), { credentials: 'omit' });
+  if (!r.ok) throw new Error('the mushroom server did not answer. try again.');
+  const j = await r.json();
+  if (j && j.error) throw new Error(j.error);
+  return j;
+}
+const pad = (n, w = 4) => String(n).padStart(w, '0');
+const low = s => esc(String(s).toLowerCase());
+
+// one colour per mushroom (same as the stickers on campus); confetti colours fill the rest of the page
+const DOT = { 1:'#65af45', 2:'#ffb8e6', 3:'#c9a27e', 4:'#5f1c2e', 5:'#f9f45e' };   // puffball green, chanterelle pink, parasol tan, morel wine, sulphur tuft yellow
+const CONFETTI = ['#950f33','#a9914f','#ff400f','#65af45','#ffdd4c','#ff9d5b','#ff6ed0','#92ff8e','#e8ff96','#b7dbff'];   // spores: wine, khaki, vermilion, moss, mustard, apricot, pink, mint, lime, sky blue (brighter, punchier)
+const CONFETTI_BOARD = CONFETTI;
+const col = m => DOT[m.id] || m.color;
+
+// dots start in the same places every time, then drift like spores in the air
+let seed = 11; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let spores = [], W = 0, H = 0, pointer = null, ticking = false;
+function scatter(colours, freshFrom, bigFrom) {
+  seed = 11;
+  H = pageHeight(); W = document.documentElement.clientWidth;
+  field.style.height = H + 'px';
+  field.innerHTML = colours.map((c, i) =>
+    `<div class="dot ${bigFrom != null && i >= bigFrom ? 'big' : ''} ${freshFrom != null && i >= freshFrom ? 'new' : ''}" style="background:${c}"></div>`).join('');
+  spores = [...field.children].map(el => ({ el, x: rnd() * (W - 16), y: rnd() * (H - 16), vx: 0, vy: 0,
+    ph: rnd() * 6.28, sp: .4 + rnd() * .6 }));
+  spores.forEach(place);
+  if (!still && !ticking) { ticking = true; requestAnimationFrame(drift); }
+}
+// height of the page content only (the spore layer is collapsed first so it never stretches the page)
+function pageHeight() {
+  field.style.height = '0px';
+  return Math.max(innerHeight, document.documentElement.scrollHeight);
+}
+function place(s) { s.el.style.left = s.x.toFixed(1) + 'px'; s.el.style.top = s.y.toFixed(1) + 'px'; }
+function drift(now) {
+  const t = now / 1000;
+  for (const s of spores) {
+    s.vx += Math.sin(t * .7 * s.sp + s.ph) * .012;
+    s.vy += Math.cos(t * .5 * s.sp + s.ph * 1.3) * .012 - .004 * s.sp;
+    if (pointer) {
+      const dx = s.x + 6 - pointer.x, dy = s.y + 6 - pointer.y, d2 = dx * dx + dy * dy;
+      if (d2 < 120 * 120) { const d = Math.sqrt(d2) || 1, f = (1 - d / 120) * .9; s.vx += dx / d * f; s.vy += dy / d * f - .2 * f; }
+    }
+    s.vx *= .96; s.vy *= .96;
+    s.x += s.vx; s.y += s.vy;
+    if (s.y < -20) s.y = H - 10; if (s.y > H) s.y = -10;
+    if (s.x < -20) s.x = W - 10; if (s.x > W) s.x = -10;
+    place(s);
+  }
+  requestAnimationFrame(drift);
+}
+const aim = (x, y) => { pointer = { x, y: y + window.scrollY }; clearTimeout(aim.t); aim.t = setTimeout(() => pointer = null, 400); };
+addEventListener('pointermove', e => aim(e.clientX, e.clientY), { passive: true });
+addEventListener('touchmove', e => { const p = e.touches[0]; if (p) aim(p.clientX, p.clientY); }, { passive: true });
+addEventListener('resize', () => { H = pageHeight(); W = document.documentElement.clientWidth; field.style.height = H + 'px'; });
+
+// if a photo won't load, try the smaller copy, then show a quiet note instead of a broken image
+function photoFail(img) {
+  if (img.dataset.alt && img.src !== img.dataset.alt) { img.src = img.dataset.alt; return; }
+  const box = img.parentElement;
+  img.remove();
+  box.classList.remove('has-img');
+  box.insertAdjacentHTML('afterbegin', '<span class="empty">photo could not load here.<br>it shows on the live site.</span>');
+}
+
+function sheet(data, name, justGot) {
+  const p = data.people.find(x => x.name.toLowerCase() === name.toLowerCase());
+  const got = p ? p.found : [];
+  return `<div class="sheet">
+    <div class="s">${low(name)}'s basket <span class="mute">(${got.length}/${data.mushrooms.length})</span></div>
+    <div class="slots">${data.mushrooms.map(m => `<div class="slot ${got.includes(m.id) ? 'got' : ''} ${m.id === justGot ? 'new' : ''}" style="--c:${col(m)}" title="${esc(m.name)}"><i>${pad(m.id)}</i></div>`).join('')}</div>
+    <div class="s" style="margin-top:28px">${got.length === data.mushrooms.length ? 'all five found.' : (data.mushrooms.length - got.length) + ' more hiding on campus'}</div>
+    <a class="toboard s" href="${BASKET}">open my basket →</a><br>
+    <a class="toboard s" href="${HOME}">see who else found them →</a>
+  </div>`;
+}
+
+/* ── my basket: which mushrooms I found, and hints for the rest ── */
+const HUE = { 1:'green', 2:'pink', 3:'light brown', 4:'wine', 5:'yellow' };
+async function renderBasket() {
+  const tabs = `<div class="tabs s"><nav><a class="on" href="#" aria-current="page">my basket</a><a href="${HOME}">live board</a></nav><span class="mute">fungi hunt</span></div>`;
+  if (!ME) {
+    app.innerHTML = `${tabs}
+      <div class="bk-head"><span class="s">your basket is empty</span></div>
+      <p class="note" style="margin-top:28px">find a mushroom hidden on campus, scan its code and collect it. it will show up here.</p>
+      <div class="form"><label for="nm" class="s">already collected some on another phone? type your forager name</label>
+        <input id="nm" maxlength="24" autocomplete="nickname" placeholder="type a name">
+        <button class="go" id="go" style="--c:#1c1c1c"><span class="pip"></span><span>open my basket</span></button></div>`;
+    scatter(Array.from({length: 40}, (_, i) => CONFETTI[(i * 7) % CONFETTI.length]));
+    const go = document.getElementById('go'), nm = document.getElementById('nm');
+    const open = () => { const v = nm.value.trim(); if (!v) { nm.focus(); return; } ME = v; try { localStorage.setItem('fungiName', ME); } catch (e) {} renderBasket(); };
+    go.onclick = open; nm.onkeydown = e => { if (e.key === 'Enter') open(); };
+    return;
+  }
+  app.innerHTML = `${tabs}<span class="s mute" style="display:block;margin-top:56px">opening your basket…</span>`;
+  const data = await call('board');
+  const p = data.people.find(x => x.name.toLowerCase() === ME.toLowerCase());
+  const got = p ? p.found : [];
+  const all = data.mushrooms.length;
+  app.innerHTML = `${tabs}
+    <div class="bk-head"><span class="s">${low(ME)}'s basket</span><span class="n">${got.length}<span class="mute">/${all}</span></span>
+      <span class="s">${got.length === all ? 'all five found. a true forager.' : got.length ? (all - got.length) + ' more hiding on campus' : 'nothing yet. go look in the cracks.'}</span></div>
+    <div class="bk-list">${data.mushrooms.map(m => {
+      const has = got.includes(m.id), ph = (m.photos || []).find(o => typeof o === 'object' ? o.src : o), src = ph ? (typeof ph === 'object' ? ph.src : ph) : '';
+      return has
+        ? `<div class="bk" style="--c:${col(m)}"><span class="ph">${src ? `<img src="${esc(src)}" alt="" onerror="this.remove()">` : ''}</span>
+            <span class="t"><span><span class="pip"></span>${pad(m.id)} · found</span><a href="${HOME}?m=${m.id}">${low(m.name)}</a><span class="mute s"><i>${low(m.latin)}</i></span></span></div>`
+        : `<div class="bk no" style="--c:${col(m)}"><span class="ph"></span>
+            <span class="t"><span class="mute">${pad(m.id)} · still hiding</span><span>??????</span><span class="mute s">look for the <span class="pip"></span>${HUE[m.id] || ''} sticker</span></span></div>`;
+    }).join('')}</div>
+    <div class="bk-who s mute">not ${low(ME)}? <a class="blink" href="#" id="chg">change name</a></div>`;
+  document.getElementById('chg').onclick = e => { e.preventDefault(); ME = ''; try { localStorage.removeItem('fungiName'); } catch (er) {} renderBasket(); };
+  const mine = data.mushrooms.filter(m => got.includes(m.id)).map(col);
+  const ground = Array.from({length: 40}, (_, i) => CONFETTI[(i * 7) % CONFETTI.length]);
+  scatter(ground.concat(mine), null, ground.length);
+}
+
+/* ── one mushroom (QR) ── */
+function renderMushroom(m) {
+  const c = col(m);
+  app.innerHTML = `
+    <div class="tabs s"><nav><a class="on" href="#" aria-current="page">this mushroom</a><a href="${BASKET}">my basket</a><a href="${HOME}">live board</a></nav><span class="mute">(${pad(m.id)}/${pad(M.length)})</span></div>
+    <div class="frame">
+      <div class="cap">${low(m.name)}</div>
+      <div class="slides" id="slides">
+        ${(m.photos && m.photos.length ? m.photos : ['']).map(ph => {
+          const o = typeof ph === 'string' ? { src: ph } : ph;
+          return `<div class="photo real ${o.src ? 'has-img' : ''}">${o.src
+            ? `<img src="${esc(o.src)}" alt="" data-alt="${esc(o.src.replace('/large.', '/medium.'))}" onerror="photoFail(this)">${o.by ? `<span class="credit">photo: ${esc(o.by)} · inaturalist · ${esc(o.license || '')}</span>` : ''}`
+            : `<span class="empty">real ${low(m.name)}<br>photo goes here</span>`}</div>`;
+        }).join('')}
+      </div>
+      <div class="pager s"><span id="slideLab">found in nyc</span><span class="pips">${Array.from({length: Math.max(1, (m.photos || []).length)}, (_, i) => `<b class="${i ? '' : 'on'}"></b>`).join('')}</span><span class="arrows"><button type="button" class="arw" id="prev" aria-label="previous photo">←</button><button type="button" class="arw" id="next" aria-label="next photo">→</button></span></div>
+      <div class="x s"><i>x ${low(m.latin)}</i></div>
+    </div>
+    <div class="loose">
+      <div>seen ${m.count} times<br>in new york city</div>
+      <div class="b">most often<br>in ${low(m.season)}</div>
+      <p class="note c">${esc(m.note)}</p>
+    </div>
+    <div class="form">
+      <label for="nm" class="s">your forager name</label>
+      <input id="nm" maxlength="24" autocomplete="nickname" placeholder="type a name" value="${esc(ME)}">
+      <button class="go" id="go" style="--c:${c}"><span class="pip"></span><span id="goT">collect this mushroom</span></button>
+      <p id="msg" class="msg" role="status" aria-live="polite"></p>
+    </div>
+    <div id="mine"></div>
+    <div class="colophon">fungi hunt<br>pratt institute<br>fall 2026<br><span class="mute">data: fungi of nyc,<br>nyms on inaturalist</span><br>sisi kim</div>`;
+  const bg = Array.from({length: 70}, (_, i) => i % 5 === 0 ? c : CONFETTI[(i * 7) % CONFETTI.length]);
+  // photos: tap the photo, use the arrows, or swipe sideways
+  const sl = document.getElementById('slides'), pips = document.querySelectorAll('.pager .pips b'), lab = document.getElementById('slideLab');
+  const prev = document.getElementById('prev'), next = document.getElementById('next'), N = sl.children.length;
+  let cur = 0;
+  const show = i => {
+    cur = (i + N) % N;
+    [...sl.children].forEach((el, k) => el.hidden = k !== cur);
+    pips.forEach((b, k) => b.classList.toggle('on', k === cur));
+    const o = (m.photos || [])[cur], meta = o && typeof o === 'object' ? [(o.date || '').replace(/-/g, '.'), o.place].filter(Boolean).join(' · ').toLowerCase() : '';
+    lab.textContent = (meta || 'found in nyc') + (N > 1 ? `  ${cur + 1}/${N}` : '');
+    prev.hidden = N < 2; next.hidden = N < 2;
+  };
+  show(0);
+  scatter(bg);   // after the extra photos are hidden, so the spores only cover the real page
+  prev.onclick = () => show(cur - 1);
+  next.onclick = () => show(cur + 1);
+  let sx = null, sy = 0;
+  sl.addEventListener('pointerdown', e => { sx = e.clientX; sy = e.clientY; });
+  addEventListener('pointerup', e => {
+    if (sx == null) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy; sx = null;
+    if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) show(cur + (dx < 0 ? 1 : -1));
+    else if (Math.abs(dx) < 8 && Math.abs(dy) < 8) show(cur + 1);
+  });
+  addEventListener('pointercancel', () => sx = null);
+  const nm = document.getElementById('nm'), go = document.getElementById('go'), goT = document.getElementById('goT'), msg = document.getElementById('msg');
+  go.onclick = async () => {
+    const name = nm.value.trim();
+    if (!name) { msg.className = 'msg err'; msg.textContent = 'write a name first'; nm.focus(); return; }
+    go.disabled = true; goT.textContent = 'collecting…'; msg.className = 'msg'; msg.textContent = '';
+    try {
+      const data = await call('checkin', name, m.id);
+      ME = data.me; try { localStorage.setItem('fungiName', ME); } catch (e) {}
+      goT.textContent = data.already ? 'already in your basket' : 'collected';
+      msg.textContent = data.already ? 'you found this one before.' : `${m.name.toLowerCase()} is in your basket.`;
+      document.getElementById('mine').innerHTML = sheet(data, ME, data.already ? null : m.id);
+      scatter(bg);
+    } catch (e) {
+      msg.className = 'msg err'; msg.textContent = ((e && e.message) || 'try again').toLowerCase();
+      go.disabled = false; goT.textContent = 'collect this mushroom';
+    }
+  };
+}
+
+/* ── live board: every find is one dot ── */
+// typewriter letters that ride a little wave, like type set by hand
+function wavy(text, o = {}) {
+  const amp = o.amp ?? 7, freq = o.freq ?? .45, rot = o.rot ?? 7, ph = o.ph ?? 0;
+  const T = performance.now() / 1000; // keeps the wave moving smoothly when the board refreshes
+  let i = 0;
+  // letters stay grouped by word so a word never breaks across lines
+  return String(text).split(' ').map(word => `<span class="wd">${[...word].map(ch => {
+    const k = i++, y = (Math.sin(k * freq + ph) * amp).toFixed(1), r = (Math.cos(k * freq + ph) * rot).toFixed(1);
+    const d = -(T + k * freq * .55 + ph).toFixed(2);
+    return `<span class="w" style="--a:${amp}px;--ro:${rot}deg;--d:${d}s;transform:translateY(${y}px) rotate(${r}deg)">${esc(ch)}</span>`;
+  }).join('')}</span>${(i++, '')}`).join(' ');
+}
+/* letters in dots, strung along lines like spores bursting out (fractions of the box: x, y, angle) */
+const BURST_WORDS = ['find', 'mushrooooms', 'hidden', 'around', 'pratt'];
+const BURST_WIDE = [[.05, .26, -14], [.25, .14, 9], [.08, .74, -20], [.50, .50, 15], [.40, .90, -8]];
+const BURST_NARROW = [[.05, .09, -10], [.05, .38, -14], [.33, .53, 9], [.06, .72, -8], [.42, .90, -12]];
+const BEAD = ['#3d2b2e', '#ffb8e6', '#f9f45e', '#c9a27e', '#f4ecd6'];
+const BOARD_BEADS = ['#e8ff96','#65af45','#ffc4e1','#e2e2e2','#ff9445','#5f1c2e'];   // light lime, grass green, light pink, light grey, bright orange, wine
+const BEAD_STRAY = BOARD_BEADS.concat(['#add3fa', '#add3fa']);   // loose letters only: the title colours + sky blue   // loose letters fly in the same colours as the spores
+const BEAD_INK = c => {   // grey letters: light grey on deep balls, a darker grey on pale ones
+  const n = parseInt(c.slice(1), 16), L = (.299 * (n >> 16) + .587 * (n >> 8 & 255) + .114 * (n & 255)) / 255;
+  return L > .62 ? '#757575' : '#e2e2e2';
+};
+// where the visible ink of a letter sits, so each letter lands in the exact middle of its ball
+const INK = document.createElement('canvas').getContext('2d');
+function inkCenter(ch, fs) {
+  INK.font = `600 ${fs}px Fredoka, "Arial Rounded MT Bold", sans-serif`;
+  const m = INK.measureText(ch);
+  return { x: (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2, y: (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2 };
+}
+if (document.fonts) document.fonts.load('600 40px Fredoka').then(() => { if (document.body.classList.contains('board')) layoutBurst(); }).catch(() => {});
+const pale = c => { const n = parseInt(c.slice(1), 16); return (.299 * (n >> 16) + .587 * (n >> 8 & 255) + .114 * (n & 255)) / 255 > .84; };
+function layoutBurst() {
+  const box = document.getElementById('burst'); if (!box) return;
+  const w = box.clientWidth, wide = w >= 700;
+  const h = wide ? Math.max(340, Math.min(innerHeight * .64, w * .5)) : w * 1.08;
+  const s = wide ? Math.max(30, Math.min(66, w / 19)) : w / 12.5, step = s * .84;
+  box.style.height = h + 'px';
+  const T = performance.now() / 1000;
+  let k = 0, out = '';
+  const bead = (x, y, ch, c, size, cls = '', ink = BEAD_INK(c)) => {
+    const fs = size * .72, ib = inkCenter(ch, fs);
+    const d = -(T + k * .37).toFixed(2), a = (2 + (k * 7) % 5), ro = (4 + (k * 5) % 7); k++;
+    return `<span class="bead ${cls}" aria-hidden="true" style="--c:${c};--t:${ink};width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;left:${(x - size / 2).toFixed(1)}px;top:${(y - size / 2).toFixed(1)}px;--a:${a}px;--ro:${ro}deg;--d:${d}s"><span class="cap" style="width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;${pale(c) ? 'box-shadow:inset 0 0 0 1px #00000014;' : ''}"><svg width="${size.toFixed(1)}" height="${size.toFixed(1)}"><text x="${(size / 2 - ib.x).toFixed(2)}" y="${(size / 2 + ib.y).toFixed(2)}" font-size="${fs.toFixed(1)}">${esc(ch)}</text></svg></span></span>`;
+  };
+  const taken = [], placed = [];
+  // words follow a loose, slightly bending path; each letter gets its own colour, size and wobble in place
+  let js = 23; const jr = () => ((js = (js * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const CURVE = [6, -4, 7, -6, 5];
+  (wide ? BURST_WIDE : BURST_NARROW).forEach(([fx, fy, ang], wi) => {
+    let x = fx * w + s / 2, y = fy * h, a = ang * Math.PI / 180, last = '';  // a: used for the off-line nudge
+    [...BURST_WORDS[wi]].forEach((ch, i) => {
+      const z = s * (.9 + jr() * .2);
+      let c; do { c = BOARD_BEADS[Math.floor(jr() * BOARD_BEADS.length)]; } while (c === last); last = c;
+      const off = (jr() - .5) * s * .32;                      // a little up or down off the line
+      const px = x - Math.sin(a) * off, py = y + Math.cos(a) * off;
+      placed.push([px, py, ch, c, z]);
+      const gap = step * (.92 + jr() * .2);
+      // wave around the word's own direction instead of drifting away from it
+      const t = (ang + Math.sin(i * .9 + wi * 1.7) * CURVE[wi % CURVE.length] * 2.2) * Math.PI / 180;
+      x += Math.cos(t) * gap; y += Math.sin(t) * gap;
+    });
+  });
+  // centre the whole title in the box (left/right and up/down)
+  const xs = placed.map(l => l[0]), ys = placed.map(l => l[1]);
+  const shx = w / 2 - (Math.min(...xs) + Math.max(...xs)) / 2;
+  const shy = Math.max(-s * .3, (h - s * .5) / 2 - (Math.min(...ys) + Math.max(...ys)) / 2);
+  placed.forEach(([px, py, ch, c, z]) => { taken.push([px + shx, py + shy]); out += bead(px + shx, py + shy, ch, c, z); });
+  // a few loose spores drifting away from the words
+  let sd = 7; const r1 = () => ((sd = (sd * 1103515245 + 12345) >>> 0) / 4294967296);
+  const letters = BURST_WORDS.join('');
+  for (let i = 0; i < (wide ? 16 : 10); i++) {
+    const ch = letters[Math.floor(r1() * letters.length)], c = BEAD_STRAY[Math.floor(r1() * BEAD_STRAY.length)], z = s * (.55 + r1() * .25);
+    let x, y, tries = 0;   // keep loose spores off the words
+    do { x = z / 2 + r1() * (w - z); y = z / 2 + r1() * (h - z); tries++; }
+    while (tries < 40 && taken.some(([px, py]) => Math.hypot(px - x, py - y) < s * .55 + z * .5 + 6));
+    if (tries >= 40) continue;
+    taken.push([x, y]); out += bead(x, y, ch, c, z, 'stray');
+  }
+  box.innerHTML = out;
+}
+addEventListener('resize', () => { if (document.body.classList.contains('board')) layoutBurst(); });
+// letters shy away from the mouse (or a finger) and bounce back
+let burstAim = null, burstTick = false;
+function nudgeBurst() {
+  burstTick = false;
+  const box = document.getElementById('burst'); if (!box) return;
+  const r = box.getBoundingClientRect();
+  box.querySelectorAll('.bead').forEach(b => {
+    if (!burstAim) { b.style.scale = ''; b.style.translate = ''; b.style.zIndex = ''; return; }
+    const cx = r.left + b.offsetLeft + b.offsetWidth / 2, cy = r.top + b.offsetTop + b.offsetHeight / 2;
+    const dx = cx - burstAim.x, dy = cy - burstAim.y, d = Math.hypot(dx, dy) || 1, R = 140;
+    if (d > R) { b.style.scale = ''; b.style.translate = ''; b.style.zIndex = ''; return; }
+    const f = 1 - d / R, k = f * f;
+    // like a magnifying glass: the closest balls swell, the ring around them is pushed outward
+    b.style.scale = (1 + 1.1 * k).toFixed(3);
+    b.style.translate = `${(dx / d * 26 * f * (1 - f)).toFixed(1)}px ${(dy / d * 26 * f * (1 - f)).toFixed(1)}px`;
+    b.style.zIndex = String(2 + Math.round(k * 20));
+  });
+}
+const aimBurst = (x, y) => { burstAim = { x, y }; if (!burstTick) { burstTick = true; requestAnimationFrame(nudgeBurst); } };
+addEventListener('pointermove', e => { if (document.body.classList.contains('board')) aimBurst(e.clientX, e.clientY); }, { passive: true });
+addEventListener('touchmove', e => { const p = e.touches[0]; if (p && document.body.classList.contains('board')) aimBurst(p.clientX, p.clientY); }, { passive: true });
+document.addEventListener('pointerleave', () => { burstAim = null; nudgeBurst(); });
+addEventListener('touchend', () => { burstAim = null; nudgeBurst(); });
+
+let shown = 0;
+let BOARD_M = null;
+function renderBoard(data) {
+  BOARD_M = data.mushrooms;
+  document.body.classList.add('board');
+  const finds = [];
+  const FLY = { 1:'#7b52d6' };   // floating find dots: the puffball flies in purple, the rest in their own colour
+  data.people.forEach(p => p.found.forEach(id => finds.push(FLY[id] || col(data.mushrooms.find(m => m.id === id) || {id}))));
+  const hidden = data.mushrooms.filter(m => !data.foundBy[m.id].length).length;
+  const tilt = [-4, 3, -2, 4, -3];
+  app.innerHTML = `
+    <div class="row2"><span class="s">fungi hunt <span class="mute">live</span> &nbsp;<a class="blink" href="${BASKET}">my basket →</a></span></div>
+    <h1 class="burst" id="burst" aria-label="find mushrooms hidden around pratt">
+    </h1>
+    <div class="stats">
+      <div style="transform:rotate(-5deg)"><span class="big">${wavy(String(data.total), { amp: 6, rot: 10 })}</span><span class="s">${wavy('finds', { amp: 3, rot: 6 })}</span></div>
+      <div style="transform:rotate(4deg);margin-top:4vh"><span class="big">${wavy(String(data.people.length), { amp: 6, rot: 10, ph: 1 })}</span><span class="s">${wavy('foragers', { amp: 3, rot: 6, ph: 1 })}</span></div>
+      <div style="transform:rotate(-2deg);margin-top:1vh"><span class="big">${wavy(String(hidden), { amp: 6, rot: 10, ph: 2 })}</span><span class="s">${wavy('still hiding', { amp: 3, rot: 6, ph: 2 })}</span></div>
+    </div>
+    <div class="kinds">${data.mushrooms.map((m, i) => {
+      const n = data.foundBy[m.id].length;
+      const line = n ? m.name.toLowerCase() : '??????';
+      return `<div class="kind ${n ? '' : 'hidden'}" style="--c:${col(m)};transform:rotate(${tilt[i % 5]}deg)"><span class="pip"></span>
+        <span>${wavy(line, { amp: 4, freq: .5, rot: 6, ph: i })} <span class="mute s">${n ? 'found by ' + n : 'nobody yet'}</span></span></div>`;
+    }).join('')}</div>
+    <div class="space"></div>
+    <div class="people">${data.people.length ? data.people.map((p, i) => `
+      <span class="who" style="transform:rotate(${tilt[(i + 2) % 5] / 2}deg)">${wavy(p.name.toLowerCase(), { amp: 3, freq: .6, rot: 6, ph: i * 1.7 })}<span class="ds">${data.mushrooms.map(m => `<b class="${p.found.includes(m.id) ? '' : 'off'}" style="--c:${col(m)}"></b>`).join('')}</span></span>`).join('')
+      : `<span class="mute">${wavy('no one yet. look in the cracks.', { amp: 4 })}</span>`}</div>`;
+  layoutBurst();
+  // a light confetti ground, then one bigger dot per find
+  const ground = Array.from({length: 40}, (_, i) => CONFETTI_BOARD[(i * 7) % CONFETTI_BOARD.length]);
+  scatter(ground.concat(finds), shown && finds.length > shown ? ground.length + shown : null, ground.length);
+  shown = finds.length;
+}
+
+async function boardLoop() {
+  try { renderBoard(await call('board')); } catch (e) {}
+  setTimeout(boardLoop, 8000);
+}
+
+(async () => {
+  try {
+    M = await call('getMushrooms');
+    const m = M.find(x => String(x.id) === MID);
+    if (m) renderMushroom(m); else if (MID === 'basket') renderBasket(); else boardLoop();
+  } catch (e) {
+    app.innerHTML = '<span class="mute">could not load the hunt. refresh to try again.</span>';
+  }
+})();
+</script>
+</body>
+</html>
