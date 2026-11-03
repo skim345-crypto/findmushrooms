@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<base target="_top">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Fungi Hunt</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
   /* white page, loose typewriter text, confetti dots drifting like spores */
@@ -140,25 +139,14 @@
 <main id="app"><span class="s mute">loading…</span></main>
 
 <script>
-const MID = new URLSearchParams(location.search).get('m') || '';
-const HOME = location.origin + location.pathname;
+const MID = '<?= mushroomId ?>';
+const HOME = '<?= ScriptApp.getService().getUrl() ?>';
 const BASKET = HOME + '?m=basket';
 let M = [], ME = '';
 try { ME = localStorage.getItem('fungiName') || ''; } catch (e) {}
 const app = document.getElementById('app'), field = document.getElementById('field');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-// the check-ins live in a Google Sheet; this page asks it through a small web address (no Google sign-in needed)
-const API = 'https://script.google.com/macros/s/AKfycbyDVAr-pzIhC5WPJW-4coGJ9huSXC0tVHMrWUO6f5ujCWVR4Sqf3VPTBStCl2dF7h4hbA/exec';
-async function call(fn, ...args) {
-  const q = new URLSearchParams({ api: fn === 'getMushrooms' ? 'mushrooms' : fn });
-  if (fn === 'checkin') { q.set('name', args[0]); q.set('m', args[1]); }
-  q.set('t', Date.now());
-  const r = await fetch(API + '?' + q.toString(), { credentials: 'omit' });
-  if (!r.ok) throw new Error('the mushroom server did not answer. try again.');
-  const j = await r.json();
-  if (j && j.error) throw new Error(j.error);
-  return j;
-}
+const call = (fn, ...args) => new Promise((ok, no) => google.script.run.withSuccessHandler(ok).withFailureHandler(no)[fn](...args));
 const pad = (n, w = 4) => String(n).padStart(w, '0');
 const low = s => esc(String(s).toLowerCase());
 
